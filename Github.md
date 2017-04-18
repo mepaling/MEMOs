@@ -2,9 +2,9 @@
 
 ## For merging 
 
-### master and A are 2 branches, and master has the newest code
+_master and A are 2 branches, and master has the newest code_
 
-master merge to A with no fast-forward then push to remote branch
+First, master merge to A with no fast-forward then push to remote branch
 ``` Bash
 git pull
 git checkout A
@@ -13,7 +13,7 @@ git commit -m "merge master to A"
 git push
 ```
 
-### if conflict occurs you need to fix them by hand, then add those files again
+__if conflict occurs you need to fix them by hand, then add those files again__
 ``` Bash
 git status
 git add <file>
@@ -22,6 +22,7 @@ git push
 ```
 
 ## For creating new orphan branch
+First create the orphan branch "orphan_branch_name" on local
 ```Bash
 git checkout --orphan orphan_branch_name
 ```
@@ -43,7 +44,7 @@ Track README and .gitignore
 git add README.md
 git add .gitignore
 ```
-_Commit and push_
+__Commit and push__
 ```Bash
 git commit -m "create orphan branch orphan_branch_name"
 git push -u pseudo pseudo
