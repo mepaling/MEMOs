@@ -1,0 +1,201 @@
+﻿STACK
+
+stack 由high(上)往low(下)長
+最上面是return address
+EBP 指向stack底端 (最上面)
+-> EBP+8=return address
+ESP 指向stack頂端 (最下面)
+ESP~EBP之間=stack frame
+EIP:目前程式執行的位置
+
+-----------------------------
+Section
+
+.text   -> 放code
+.data   -> 有初始值的全域變數
+.bss    -> 沒有初始值&初始值為0的全域變數
+.rodata -> 放唯讀(read-only)的section
+
+-----------------------------
+objdump 
+
+objdump > xxx.dump -M intel -d program_name
+-d	objdump -d a.o	反組譯程式段 (-disassemble)
+-D	objdump -D a.o	反組譯全部區段 (-disassemble-all)
+
+-----------------------------
+X64 Calling Convention
+
+function argument (前6個在register)
+0 ~ 5   -> %rdi, %rsi, %rdx, %rcx, %r8, and %r9
+6 ~ n−1 -> stack. 
+
+-----------------------------
+GDB_PEDA
+
+gcc -g -> debug symbol
+
+gdb -n -q 只用gdb 不用peda
+
+set disassembly-flavor intel
+disas 反組譯 function (pdisas function加顏色)
+ex. pdisas main
+
+
+checksec -> 保護機制
+aslr -> 看aslr有沒有開
+elfsymbol -> function 位置 (@plt)
+vmmap -> process 用了哪些lib 其位置 address 權限 rwx
+readelf -> section位置 .data, .bss ...
+find -> 找字串 ex. /bin/sh
+
+i r -> info registers     -> 看全部register
+i r rax -> info registers rax -> 看rax
+i b -> info breakpoints -> 看中斷點位置
+i var -> 看所有variable的名稱&其位置
+i local -> 有debug symbol情況下看區域變數的值
+
+del 2 -> delete #num 中斷點
+
+b *address ex. b *0x8048014 -> 下中斷點
+
+r -> run program
+c -> continue from breakpoint
+n -> step over (next)
+s -> step into (step)
+p -> print variable (ex. p a -> print variable a)
+
+x/40wx address ex. x/wx 0x8048014 -> 看address內容
+x /[Format] [Address expression]
+x /[Length][Format] [Address expression]
+Format:
+o-8 / x-16 / d-10 / u-unsigned decimal / t-binary / f-floating point
+a-address /c-char / s-string / i-instruction
+Size modifiers:
+b - byte / h - halfword (16-bit value) / w - word (32-bit value) / g - giant word (64-bit value)
+
+x/4i $pc 
+display/4i $pc -> 原生gdb
+
+ni -> next instruction
+si -> step into
+bt -> 顯示stack frame (誰call誰)
+set *addr = value -> 把 value 設到 addr 裡面
+set $eax = $edx -> 把edx的值設到eax
+x/x &name
+pattc
+crashoff (算offset)
+pattc 100 -> 產生長度100的random string
+-----------------------------
+外部指令
+
+nm binary -> 看 binary 符號信息
+file -> 看檔案內容
+
+strace -> trace all system call
+ltrace -> trace all library call
+ltrace 第一個: __libc_start_main 參數
+readelf -l binary -> 看program header
+readelf -d binary -> 看dynamic section
+readelf -S binary -> 看section header
+
+objcopy -O binary hello.bin shellcode.bin
+xxd shellcode.bin
+xxd -i shellcode.bin //C code
+
+ncat -ve ./bofeasy(bin) -kl 8888 -> 自己開port listen
+
+組合語言
+nasm -felf32 lab2.s -o lab2.o
+ld lab2.o -melf_i386 -o lab2
+objcopy -O binary lab2 sc.bin
+xxd -i sc.bin
+
+----------------------------
+System call
+
+instruction: int 0x80
+eax: system call number
+ebx, ecx, edx, esi, edi: arg
+basic.pdf P82~
+
+----------------------------
+return to library
+保護機制:
+DEP 可寫不可執行 可執行不可寫 (vmmap)
+STACKGUARD -> stack smashing detected
+Partial -> .got唯讀
+
+.got Global Offset Table
+.plt Procedure Linkage Table
+延遲綁定技術，也就是等到調用函數的時候才進行函數地址的定位
+
+objdump -R elf or readelf -> find function's GOT offset (print動態重定位)
+ex. 00000000004005a0 <printf@plt>:
+    601020 <_GLOBAL_OFFSET_TABLE_+0x20>
+
+
+objdump -T libc.so.6 | grep funciton 得到function 在 libc中的offset
+
+放參數要空一格 (for return address)
+
+----------------------------
+ROPgadget
+
+ROPgadget --ropchain --binary bin_file > gadget
+NX打開 canary沒開的情況下 static link(by file)
+1.把 "/bin/sh" 寫到 buffer (可寫在 .data(一定可寫) -> by readelf)
+  分兩次寫 第一次寫 buf, 第二次寫 buf+4
+2.寫register (eax=0xb, ebx=address of "/bin/sh", ecx=0, edx=0)
+3.最後 int 0x80 (activate system call)
+可以直接寫data section -> by readelf
+
+Stack Migration
+elfsymbol
+overflow 長度有限 看stack只能蓋一點點address
+動到ebp esp的gadget
+
+got address -> objdump -R
+
+----------------------------
+heap exploit
+
+heap -> heap base addr
+chunkinfo addr -> chunk info
+heapinfo
+x/30gx $heap
+force -> tell nb's value
+
+----------------------------
+C++
+
+c++filt 亂碼 -> 變回可讀的function
+在gdb可使用 set print asm-demangle on
+
+Vector & String
+g++ < 5 vs. g++ >= 5
+
+----------------------------
+Format String
+
+printf("%3$p") -> 讀printf後第3個參數，用格式p印出
+可造成任意leak
+**address不能有null byte**
+**否則需要自行padding**
+
+read
+printf("\xef\xbe\ad\xd%4$s") -> puts *0xdeadbeef
+
+%n -> 對特定參數寫值(int 大小)
+12345%3$n -> 對第3個參數寫入len("12345") = 5
+
+%hn (2bytes) -> %hhn (1bytes)
+
+***注意前面已經印出的字元數***
+%(0xc-16+256)c%2$hhn = %252c%hhn -> 寫252byte
+
+-----------------------------
+Tricks
+
+canary 第一個byte為00 ex.0x61626300
+fork or multithread -> child proc/thread canary = parent proc/thread canary
